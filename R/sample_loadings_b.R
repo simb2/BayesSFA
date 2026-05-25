@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Sample loadings (PLT model)
 #'
 #' Draws rows of \eqn{\Lambda} from their Normal conditional posteriors under the PLT

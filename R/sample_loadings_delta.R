@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Sample loadings and idiosyncratic variances (UGLT model)
 #'
 #' Draws \eqn{\lambda_{k,\delta_k}} and \eqn{\sigma^2_k} jointly from their Normal-Inverse-Gamma conditional
@@ -18,10 +19,10 @@ sample_loadings_variances <- function(data, Factors, delta, theta, alpha, beta, 
   q <- dim(Factors)[1]  # number of factors
   N <- dim(data)[2]  # number of observations
   factors <- t(Factors)
-  
+
   Lambda_new <- matrix(0, V, q)
   sigma2_new <- numeric(V)
-  # First computing 
+  # First computing
   for (i in 1:V) {
     # First we make sure the row is non zero
     if (sum(delta[i, ]) != 0) {

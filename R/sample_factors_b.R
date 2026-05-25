@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Sample latent factors (PLT model)
 #'
 #' Draws each column \eqn{f_t \sim N(V_F \Lambda' D^{-1} y_t,\; V_F)} jointly for all t, where

@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Update pivot rows via Metropolis-Hastings moves
 #'
 #' Applies one randomly chosen move per column j (shift, switch, or add/delete)

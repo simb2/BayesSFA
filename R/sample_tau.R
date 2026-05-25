@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Sample slab probabilities
 #'
 #' Draws \eqn{\tau_j \sim \mathrm{Beta}(a_\tau + d_j - 1,\; b_\tau + v - l_j - d_j + 1)} for each j,
@@ -15,10 +16,10 @@ sample_tau <- function(hyperparams, delta, pivots) {
     if (hyperparams$bH + nrow(delta) - pivots[j] -  colsums.delta[j] + 1 <  0) {
       browser()
     }
-    
+
     new.tau[j] <- rbeta(1, hyperparams$aH + colsums.delta[j] - 1,
                         hyperparams$bH + nrow(delta) - pivots[j] -  colsums.delta[j] + 1)
-    
+
     if (is.na(new.tau[j])) {
       browser()
     }

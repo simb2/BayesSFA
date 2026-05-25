@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Remove spurious factors from posterior draws
 #'
 #' A factor column j is spurious when only its pivot row is active
@@ -42,7 +43,7 @@ filter_factors <- function(pivot_draws, factor_draws, lambda_draws, delta_draws,
       }
     }
   }
-  return(list(sigma_draws = sigma_draws, factor_draws = factor_draws, 
+  return(list(sigma_draws = sigma_draws, factor_draws = factor_draws,
               lambda_draws = lambda_draws, delta_draws = delta_draws,
               tau_draws = tau_draws, theta_draws = theta_draws, pivot_draws = pivot_draws))
 }

@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Compute the posterior mode of \eqn{\delta}
 #'
 #' Finds the most frequently visited sparsity pattern across a set of draws

@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Sample column shrinkage parameters
 #'
 #' Draws \eqn{\theta_j \sim G^{-1}(a_\theta + d_j/2,\; b_\theta + r_j/2)} for each j, where

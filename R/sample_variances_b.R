@@ -1,3 +1,4 @@
+#' @keywords internal
 #' Sample idiosyncratic variances (PLT model)
 #'
 #' Draws \eqn{\sigma^2_k \sim G^{-1}((\nu + N)/2,\; (\nu s^2 + \mathrm{SSR}_k)/2)} for all k simultaneously,
