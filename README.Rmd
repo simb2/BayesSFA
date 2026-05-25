@@ -18,7 +18,7 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-This package is in development. This package allow users to fit Bayesian factor models under various sparsity constraints. More details to be added soon!
+This package is in development.Our goal is to allow users to fit Bayesian factor models under various sparsity constraints. More details to be added soon!
 
 TO DO: 
 
