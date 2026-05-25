@@ -16,6 +16,10 @@ LinkingTo:
     RcppArmadillo
 Imports: 
     cli,
+    dplyr,
+    GIGrvg,
     MASS,
+    purrr,
     Rcpp,
-    sparvaride
+    sparvaride,
+    tibble

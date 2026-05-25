@@ -6,21 +6,21 @@
 #' @param x Tibble of draws (filtered to a fixed r), with a \code{delta_test} list-column.
 #' @return \eqn{v \times r} matrix of the modal sparsity pattern.
 post_mode_delta <- function(x) {
-  delta_test <- array(NA, dim = c(length(x$delta_test), 
+  delta_test <- array(NA, dim = c(length(x$delta_test),
                                   nrow(x$delta_test[[1]]), # V
                                   ncol(x$delta_test[[1]])))
-  
+
   for (i in seq_along(x$delta_test)) {
     delta_test[i, , ] <- x$delta_test[[i]]
   }
-  
-  counted_sparsities <- as_tibble(delta_test) |>
-    group_by_all() |>
-    summarise(n = n())
+
+  counted_sparsities <- tibble::as_tibble(delta_test) |>
+    dplyr::group_by_all() |>
+    dplyr::summarise(n = n())
   post_mode_delta <- as.numeric(
     counted_sparsities[which.max(counted_sparsities$n), ]
   )
-  matrix(post_mode_delta[1:(nrow(x$delta_test[[1]]) * ncol(x$delta_test[[1]]))], 
+  matrix(post_mode_delta[1:(nrow(x$delta_test[[1]]) * ncol(x$delta_test[[1]]))],
          nrow = nrow(x$delta_test[[1]]))
 }
 
@@ -61,8 +61,8 @@ compute_post_means <- function(x) {
   tau_mean <- (tau_mean)/length(x$Lambda_test)
   theta_mean <- (theta_mean)/length(x$Lambda_test)
   factors_est <- (factors_est)/length(x$Lambda_test)
-  
-  
-  list(sigma2_mean = sigma2_mean, tau_mean = tau_mean, theta_mean = theta_mean, 
+
+
+  list(sigma2_mean = sigma2_mean, tau_mean = tau_mean, theta_mean = theta_mean,
        factors_est = factors_est)
 }

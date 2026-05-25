@@ -30,7 +30,7 @@ sample_loadings <- function(data, sigma2, Factors, c_0) {
   for (h in (q+1):V) {
     post_cov <- solve((1/c_0) * diag(q) + (1/sigma2[h]) * FF)
     post_mean <- post_cov %*% ((1/sigma2[h]) * Factors %*% data[h, ])
-    Lambda_new[h, ] <- MASS::mvrnorm(1, post_mean, post_cov)
+    Lambda_new[h, ] <-  MASS::mvrnorm(1, post_mean, post_cov)
   }
 
   return(Lambda_new)

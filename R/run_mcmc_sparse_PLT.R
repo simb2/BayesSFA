@@ -115,7 +115,7 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
   }
   # first get everything into a data frame.
 
-  draw_df <- tibble(
+  draw_df <- tibble::tibble(
     pivot_test = pivot_test,
     W = W,
     Lambda_test = Lambda_test,
@@ -130,7 +130,7 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
   r_vals <- unique(r)
 
   estimate_results <- purrr::map(r_vals, function(val) {
-    dfr <- draw_df |> filter(r == val)
+    dfr <- draw_df |> dplyr::filter(r == val)
     delta_mode <- post_mode_delta(dfr)
     append(
       list(
