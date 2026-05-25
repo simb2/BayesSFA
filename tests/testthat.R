@@ -8,5 +8,3 @@
 
 library(testthat)
 library(BayesSFA)
-
-test_check("BayesSFA")

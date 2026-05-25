@@ -1,20 +1,8 @@
 # Run MCMC UGLT
-library(MASS)
-library(cli)
-library(sparvaride)
-source(here("MCMC_Algorithms" ,"sample_column_shrinkage.R"))
-source(here("MCMC_Algorithms" ,"sample_tau.R"))
-source(here("MCMC_Algorithms" ,"sample_pivots.R"))
-source(here("MCMC_Algorithms" ,"sample_factors_b.R"))
-source(here("MCMC_Algorithms" ,"sample_sparsity.R"))
-source(here("MCMC_Algorithms" ,"sample_loadings_delta.R"))
-source(here("MCMC_Algorithms" ,"boost_uglt.R"))
-source(here("MCMC_Algorithms" ,"filter_factors.R"))
-source(here("MCMC_Algorithms" ,"compute_modes.R"))
 
 
 run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hyperparams, data, thin = 1, burn = 1, ident = TRUE) {
-  cli_progress_bar("Sampling from Posterior . . .", total = n_runs)
+  cli::cli_progress_bar("Sampling from Posterior . . .", total = n_runs)
   y <- data
   V <- nrow(y)
   inner_prod_y <- rowSums(y^2)
@@ -34,15 +22,15 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
   delta_test[[1]] <- delta_start
   pivot_test[[1]] <- pivots_start
   tau_test[[1]] <- rep(0.5, q) # how to choose starting values for this?
-  
+
   theta_test[[1]] <- rep(1, q) # how to choose starting values for this?
   pc <- princomp(t(y))
   scores <- pc$scores[, 1:q]
   W[[1]] <- t(scores)
   Lambda_est <- pc$loadings[, 1:q]
   sigma_test[[1]] <- diag(cov(t(y - Lambda_est %*% W[[1]])))
-  
-  
+
+
   for (i in 2:n_runs) {
     tau_test[[i]] <- sample_tau(hyperparams, delta_test[[i - 1]], pivot_test[[i - 1]])
     res <- sample_sparsity(y, W[[i - 1]], tau_test[[i]], theta_test[[i - 1]], delta_test[[i - 1]], alpha, beta, inner_prod_y)
@@ -57,14 +45,14 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
       theta.shape, theta.rate, Lambda_test[[i]],
       sigma_test[[i]], delta_test[[i]]
     )
-    
+
     T_stat[[i]] <- sum(diag(0.5 * (Lambda_test[[i]] %*% t(Lambda_test[[i]]) + diag(sigma_test[[i]]))))
     boost <- boost_uglt(Lambda = Lambda_test[[i]], factors = W[[i]], sigma2 = sigma_test[[i]], theta = theta_test[[i]])
     Lambda_test[[i]] <- boost$Lambda_new
     W[[i]] <- boost$factors_new
-    cli_progress_update()
+    cli::cli_progress_update()
   }
-  
+
   thin_burn <- seq(burn, n_runs, by = thin)
   Lambda_test <- Lambda_test[thin_burn]
   sigma_test <- sigma_test[thin_burn]
@@ -76,7 +64,7 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
   W <- W[thin_burn]
   print(length(thin_burn))
   pivot_test <- as.matrix(pivot_test)
-  
+
   filtered <- filter_factors(
     pivot_draws = pivot_test, factor_draws = W,
     lambda_draws = Lambda_test, delta_draws = delta_test,
@@ -97,7 +85,7 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
       m0 <- sum(rowSums(delta) == 0)
       return(2*ncol(delta) <= nrow(delta) - m0 - 1)
     }
-    
+
     identifiable <- unlist(lapply(delta_test, indentifiable_check))
     Lambda_test <- Lambda_test[identifiable]
     sigma_test <- sigma_test[identifiable]
@@ -108,12 +96,12 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
     T_stat <- T_stat[identifiable]
     W <- W[identifiable]
   }
-  
+
   for (i in seq_along(Lambda_test)) {
     pivot_test[[i]] <- unlist(pivot_test[[i]])
     delta_test[[i]] <- delta_test[[i]][, order(pivot_test[[i]])]
     Lambda_test[[i]] <- Lambda_test[[i]][, order(pivot_test[[i]])]
-    
+
     for (f in 1:dim(data)[2]) {
       W[[i]][, f] <- W[[i]][order(pivot_test[[i]]), f] %*% diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][order(pivot_test[[i]])], ])))
     }
@@ -126,7 +114,7 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
     r[i] <- ncol(Lambda_test[[i]])
   }
   # first get everything into a data frame.
-  
+
   draw_df <- tibble(
     pivot_test = pivot_test,
     W = W,
@@ -140,7 +128,7 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
     T_stat = T_stat
   )
   r_vals <- unique(r)
-  
+
   estimate_results <- purrr::map(r_vals, function(val) {
     dfr <- draw_df |> filter(r == val)
     delta_mode <- post_mode_delta(dfr)
@@ -156,8 +144,8 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
     )
   })
   estimate_results$r <- r_vals
-  
-  
+
+
   return(list(
     # Posterior summaries
     estimates = estimate_results,

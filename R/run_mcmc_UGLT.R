@@ -1,19 +1,4 @@
 # Run MCMC UGLT
-library(MASS)
-library(cli)
-library(sparvaride)
-library(here)
-source(here("MCMC_Algorithms", "sample_column_shrinkage.R"))
-source(here("MCMC_Algorithms", "sample_tau.R"))
-source(here("MCMC_Algorithms", "sample_pivots.R"))
-source(here("MCMC_Algorithms", "sample_factors_b.R"))
-source(here("MCMC_Algorithms", "sample_sparsity.R"))
-source(here("MCMC_Algorithms", "sample_loadings_delta.R"))
-source(here("MCMC_Algorithms", "boost_uglt.R"))
-source(here("MCMC_Algorithms", "filter_factors.R"))
-source(here("MCMC_Algorithms", "compute_modes.R"))
-
-
 #' Run the UGLT sparse factor model MCMC sampler
 #'
 #' Implements the partially collapsed Gibbs sampler for the UGLT model
@@ -37,7 +22,7 @@ source(here("MCMC_Algorithms", "compute_modes.R"))
 #' @return List with \code{estimates} (posterior summaries by factor dimension r)
 #'   and \code{draws} (tibble of retained MCMC draws).
 run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hyperparams, data, thin = 1, burn = 1, ident = NULL) {
-  cli_progress_bar("Sampling from Posterior . . .", total = n_runs)
+  cli::cli_progress_bar("Sampling from Posterior . . .", total = n_runs)
 
   y <- data
   N <- ncol(y)
@@ -65,7 +50,7 @@ run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hy
   centered_y <- y - rowMeans(y)
   sv <- svd(centered_y)
   Lambda_est <- sv$u[, 1:q]
-  
+
   W[[1]] <- t(sv$v[, 1:q]) * sv$d[1:q] # q x n
 
   # Residual variance per variable
@@ -74,10 +59,10 @@ run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hy
 
   for (i in 2:n_runs) {
     tau_test[[i]] <- sample_tau(hyperparams, delta_test[[i - 1]], pivot_test[[i - 1]])
-    res <- sample_sparsity(y, W[[i - 1]], tau_test[[i]], theta_test[[i - 1]], delta_test[[i - 1]], alpha, beta, inner_prod_y)
-    pivots_new <- apply(res$delta_new, 2, function(col) which(col != 0)[1])
+    delta_new <- sample_sparsity(y, W[[i - 1]], tau_test[[i]], theta_test[[i - 1]], delta_test[[i - 1]], as.integer(pivot_test[[i - 1]]), alpha, beta, inner_prod_y)
+    pivots_new <- apply(delta_new, 2, function(col) which(col != 0)[1])
     res2 <- update_pivots(
-      delta = res$delta_new, theta = theta_test[[i - 1]], pivots = pivots_new, factors = W[[i - 1]], y = y,
+      delta = delta_new, theta = theta_test[[i - 1]], pivots = pivots_new, factors = W[[i - 1]], y = y,
       alpha = alpha, beta = beta, hyperparams = hyperparams, move_probs = list(
         pshift = 0.3, pswitch = 0.3,
         pa = 0.5
