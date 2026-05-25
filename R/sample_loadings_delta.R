@@ -1,5 +1,3 @@
-library(MASS)
-
 #' Sample loadings and idiosyncratic variances (UGLT model)
 #'
 #' Draws \eqn{\lambda_{k,\delta_k}} and \eqn{\sigma^2_k} jointly from their Normal-Inverse-Gamma conditional

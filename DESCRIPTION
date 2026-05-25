@@ -2,10 +2,9 @@ Package: BayesSFA
 Title: What the Package Does (One Line, Title Case)
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+    person("Simran", "Bilkhu", , "1simranbilkhu@gmail.com", role = c("aut", "cre"))
+Description: Allows users to fit various sparse bayesian factor analytic models.
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
@@ -16,4 +15,7 @@ LinkingTo:
     Rcpp,
     RcppArmadillo
 Imports: 
-    Rcpp
+    cli,
+    MASS,
+    Rcpp,
+    sparvaride
