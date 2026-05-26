@@ -17,7 +17,7 @@ post_mode_delta <- function(x) {
 
   counted_sparsities <- tibble::as_tibble(delta_test) |>
     dplyr::group_by_all() |>
-    dplyr::summarise(n = n())
+    dplyr::summarise(n = dplyr::n())
   post_mode_delta <- as.numeric(
     counted_sparsities[which.max(counted_sparsities$n), ]
   )

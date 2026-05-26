@@ -15,7 +15,7 @@
 #' @param theta.shape Scalar shape hyperparameter \eqn{a_\theta} for the \eqn{G^{-1}} prior on \eqn{\theta}.
 #' @param theta.rate Scalar rate hyperparameter \eqn{b_\theta} for the \eqn{G^{-1}} prior on \eqn{\theta}.
 #' @param hyperparams List with \code{aH} and \code{bH} for the Beta prior on \eqn{\tau}.
-#' @param data \eqn{v \times N} data matrix \eqn{Y}.
+#' @param y \eqn{v \times N} data matrix \eqn{Y}.
 #' @param thin Thinning interval (retain every \code{thin}-th draw after burn-in).
 #' @param burn Index of the first draw to retain.
 #' @param fixed TRUE or FALSE. If TRUE, factors are fixed. If not, factors are estimated via post processing, and posterior estimates are provided after post processing.
