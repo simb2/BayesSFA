@@ -1,9 +1,32 @@
-# Run MCMC UGLT
+# Run MCMC for a sparse PLT model:
 
+#' Run the PLT sparse factor model MCMC sampler
+#'
+#' Implements the partially collapsed Gibbs sampler for the PLT model
+#' (Algorithm 3.2 of Bilkhu \& Jeganathan). Each iteration samples \eqn{\tau}, \eqn{\delta},
+#' \eqn{l}, \eqn{\Lambda}, \eqn{\sigma^2}, \eqn{F}, and \eqn{\theta} in sequence, followed by
+#' the GIG boost step. Applies post-processing: spurious factor removal,
+#' identifiability filtering via the counting rule, column reordering by pivot,
+#' and sign normalisation.
+#'
+#' @param q Number of factors \eqn{q}.
+#' @param n_runs Total number of MCMC iterations.
+#' @param alpha Length-v shape parameters \eqn{\alpha} for the \eqn{G^{-1}} prior on \eqn{\sigma^2}.
+#' @param beta Length-v rate parameters \eqn{\beta} for the \eqn{G^{-1}} prior on \eqn{\sigma^2}.
+#' @param theta.shape Scalar shape hyperparameter \eqn{a_\theta} for the \eqn{G^{-1}} prior on \eqn{\theta}.
+#' @param theta.rate Scalar rate hyperparameter \eqn{b_\theta} for the \eqn{G^{-1}} prior on \eqn{\theta}.
+#' @param hyperparams List with \code{aH} and \code{bH} for the Beta prior on \eqn{\tau}.
+#' @param y \eqn{v \times N} data matrix \eqn{y}.
+#' @param thin Thinning interval (retain every \code{thin}-th draw after burn-in).
+#' @param burn Index of the first draw to retain.
+#' @param fixed TRUE or FALSE. If TRUE, factors are fixed. If not, factors are estimated via post processing, and posterior estimates are provided after post processing.
+#' @return List with \code{estimates} (posterior summaries by factor dimension r)
+#'   and \code{draws} (tibble of retained MCMC draws).
 
-run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hyperparams, data, thin = 1, burn = 1, ident = TRUE) {
+run_mcmc_sparse_PLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate,
+  hyperparams, y, thin = 1, burn = 1, fixed) {
   cli::cli_progress_bar("Sampling from Posterior . . .", total = n_runs)
-  y <- data
+  N <- ncol(y)
   V <- nrow(y)
   inner_prod_y <- rowSums(y^2)
   delta_start <- matrix(1, nrow = V, ncol = q)
@@ -18,7 +41,6 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
   W <- list()
   T_stat <- numeric(n_runs)
   pivot_test <- list()
-  accepted <- 0
   delta_test[[1]] <- delta_start
   pivot_test[[1]] <- pivots_start
   tau_test[[1]] <- rep(0.5, q) # how to choose starting values for this?
@@ -65,44 +87,44 @@ run_mcmc_sparse_PLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.ra
   print(length(thin_burn))
   pivot_test <- as.matrix(pivot_test)
 
-  filtered <- filter_factors(
-    pivot_draws = pivot_test, factor_draws = W,
-    lambda_draws = Lambda_test, delta_draws = delta_test,
-    theta_draws = theta_test,
-    sigma_draws = sigma_test,
-    tau_draws = tau_test,
-    n_draws = length(thin_burn)
-  )
-  pivot_test <- filtered$pivot_draws
-  W <- filtered$factor_draws
-  Lambda_test <- filtered$lambda_draws
-  delta_test <- filtered$delta_draws
-  theta_test <- filtered$theta_draws
-  tau_test <- filtered$tau_draws
-  sigma_test <- filtered$sigma
-  if (ident) {
-    indentifiable_check <- function(delta) {
-      m0 <- sum(rowSums(delta) == 0)
-      return(2*ncol(delta) <= nrow(delta) - m0 - 1)
-    }
-
-    identifiable <- unlist(lapply(delta_test, indentifiable_check))
-    Lambda_test <- Lambda_test[identifiable]
-    sigma_test <- sigma_test[identifiable]
-    tau_test <- tau_test[identifiable]
-    theta_test <- theta_test[identifiable]
-    delta_test <- delta_test[identifiable]
-    pivot_test <- pivot_test[identifiable]
-    T_stat <- T_stat[identifiable]
-    W <- W[identifiable]
+  if (!fixed) {
+    filtered <- filter_factors(
+      pivot_draws = pivot_test, factor_draws = W,
+      lambda_draws = Lambda_test, delta_draws = delta_test,
+      theta_draws = theta_test,
+      sigma_draws = sigma_test,
+      tau_draws = tau_test,
+      n_draws = length(thin_burn)
+    )
+    pivot_test <- filtered$pivot_draws
+    W <- filtered$factor_draws
+    Lambda_test <- filtered$lambda_draws
+    delta_test <- filtered$delta_draws
+    theta_test <- filtered$theta_draws
+    tau_test <- filtered$tau_draws
+    sigma_test <- filtered$sigma_draws
   }
+  indentifiable_check <- function(delta) {
+    m0 <- sum(rowSums(delta) == 0)
+    return(2*ncol(delta) <= nrow(delta) - m0 - 1)
+  }
+
+  identifiable <- unlist(lapply(delta_test, indentifiable_check))
+  Lambda_test <- Lambda_test[identifiable]
+  sigma_test <- sigma_test[identifiable]
+  tau_test <- tau_test[identifiable]
+  theta_test <- theta_test[identifiable]
+  delta_test <- delta_test[identifiable]
+  pivot_test <- pivot_test[identifiable]
+  T_stat <- T_stat[identifiable]
+  W <- W[identifiable]
 
   for (i in seq_along(Lambda_test)) {
     pivot_test[[i]] <- unlist(pivot_test[[i]])
     delta_test[[i]] <- delta_test[[i]][, order(pivot_test[[i]])]
     Lambda_test[[i]] <- Lambda_test[[i]][, order(pivot_test[[i]])]
 
-    for (f in 1:dim(data)[2]) {
+    for (f in 1:dim(y)[2]) {
       W[[i]][, f] <- W[[i]][order(pivot_test[[i]]), f] %*% diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][order(pivot_test[[i]])], ])))
     }
     Lambda_test[[i]] <- Lambda_test[[i]] %*% diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][order(pivot_test[[i]])], ])))

@@ -24,7 +24,7 @@
 #'   \item{T_stat}{Numeric vector of the trace statistic at each kept iteration.}
 #' }
 #' @export
-run_mcmc <- function(Lambda_0, sigma2_0, n_runs = 1000, data, q, nu, s2, c_0, thin = 1, burn = 1) {
+fitBayesPLT <- function(Lambda_0, sigma2_0, n_runs = 1000, data, q, nu, s2, c_0, thin = 1, burn = 1) {
   cli::cli_progress_bar("Sampling from Posterior", total = n_runs)
   W <- array(data = NA, dim = c(n_runs, q, dim(data)[2]))
   L <- array(data = NA, dim = c(n_runs, dim(data)[1], q))
@@ -39,17 +39,17 @@ run_mcmc <- function(Lambda_0, sigma2_0, n_runs = 1000, data, q, nu, s2, c_0, th
   boost_1 <- boost(Lambda = L[1, , ], factors = W[1, , ], c_0)
   L[1, , ] <- boost_1$Lambda_new
   W[1, , ] <- boost_1$factors_new
-  T_stat[1] <- sum(diag(L[1, , ] %*% t(L[1, , ])) + solve(diag(S[1, ])))
+  T_stat[1] <- sum(diag(L[1, , ] %*% t(L[1, , ]) + diag(S[1, ])))
   cli::cli_progress_update()
 
   for (c in 2:n_runs) {
     W[c, , ] <- sample_factors(L[c - 1, , ], S[c - 1, ], data, q)
-    L[c, , ] <- sample_loadings(data, S[c - 1, ], W[c - 1, , ], c_0)
+    L[c, , ] <- sample_loadings(data, S[c - 1, ], W[c, , ], c_0)
     S[c, ] <- sample_variances(nu, s2, data, W[c, , ], L[c, , ])
     boost <- boost(Lambda = L[c, , ], factors = W[c, , ], c_0)
     L[c, , ] <- boost$Lambda_new
     W[c, , ] <- boost$factors_new
-    T_stat[c] <- sum(diag(L[c, , ] %*% t(L[c, , ])) + solve(diag(S[c, ])))
+    T_stat[c] <- sum(diag(L[c, , ] %*% t(L[c, , ]) + diag(S[c, ])))
     cli::cli_progress_update()
   }
   for (l in 1:n_runs) {
@@ -64,6 +64,3 @@ run_mcmc <- function(Lambda_0, sigma2_0, n_runs = 1000, data, q, nu, s2, c_0, th
     Variances = S[thin_burn, ], T_stat = T_stat[thin_burn]
   ))
 }
-
-
-# test matrix

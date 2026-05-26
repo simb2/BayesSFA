@@ -2,13 +2,12 @@
 #' Run the UGLT sparse factor model MCMC sampler
 #'
 #' Implements the partially collapsed Gibbs sampler for the UGLT model
-#' (Algorithm 3.2 of Bilkhu & Jeganathan). Each iteration samples \eqn{\tau}, \eqn{\delta},
+#' (Algorithm 3.2 of Bilkhu \& Jeganathan). Each iteration samples \eqn{\tau}, \eqn{\delta},
 #' \eqn{l}, \eqn{\Lambda}, \eqn{\sigma^2}, \eqn{F}, and \eqn{\theta} in sequence, followed by
 #' the GIG boost step. Applies post-processing: spurious factor removal,
 #' identifiability filtering via the counting rule, column reordering by pivot,
 #' and sign normalisation.
 #'
-#' @param N Ignored; number of observations is derived from \code{data}.
 #' @param q Number of factors \eqn{q}.
 #' @param n_runs Total number of MCMC iterations.
 #' @param alpha Length-v shape parameters \eqn{\alpha} for the \eqn{G^{-1}} prior on \eqn{\sigma^2}.
@@ -19,12 +18,12 @@
 #' @param data \eqn{v \times N} data matrix \eqn{Y}.
 #' @param thin Thinning interval (retain every \code{thin}-th draw after burn-in).
 #' @param burn Index of the first draw to retain.
+#' @param fixed TRUE or FALSE. If TRUE, factors are fixed. If not, factors are estimated via post processing, and posterior estimates are provided after post processing.
 #' @return List with \code{estimates} (posterior summaries by factor dimension r)
 #'   and \code{draws} (tibble of retained MCMC draws).
-run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hyperparams, data, thin = 1, burn = 1) {
+run_mcmc_UGLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate, hyperparams, y, thin = 1, burn = 1, fixed) {
   cli::cli_progress_bar("Sampling from Posterior . . .", total = n_runs)
 
-  y <- data
   N <- ncol(y)
   V <- nrow(y)
   inner_prod_y <- rowSums(y^2)
@@ -40,7 +39,6 @@ run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hy
   W <- list()
   T_stat <- numeric(n_runs)
   pivot_test <- list()
-  accepted <- 0
   delta_test[[1]] <- delta_start
   pivot_test[[1]] <- pivots_start
   tau_test[[1]] <- rep(0.5, q) # how to choose starting values for this?
@@ -84,7 +82,7 @@ run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hy
     boost <- boost_uglt(Lambda = Lambda_test[[i]], factors = W[[i]], sigma2 = sigma_test[[i]], theta = theta_test[[i]])
     Lambda_test[[i]] <- boost$Lambda_new
     W[[i]] <- boost$factors_new
-    cli_progress_update()
+    cli::cli_progress_update()
   }
 
   thin_burn <- seq(burn, n_runs, by = thin)
@@ -98,22 +96,23 @@ run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hy
   W <- W[thin_burn]
   print(length(thin_burn))
   pivot_test <- as.matrix(pivot_test)
-
-  filtered <- filter_factors(
-    pivot_draws = pivot_test, factor_draws = W,
-    lambda_draws = Lambda_test, delta_draws = delta_test,
-    theta_draws = theta_test,
-    sigma_draws = sigma_test,
-    tau_draws = tau_test,
-    n_draws = length(thin_burn)
-  )
-  pivot_test <- filtered$pivot_draws
-  W <- filtered$factor_draws
-  Lambda_test <- filtered$lambda_draws
-  delta_test <- filtered$delta_draws
-  theta_test <- filtered$theta_draws
-  tau_test <- filtered$tau_draws
-  sigma_test <- filtered$sigma
+  if (!fixed) {
+    filtered <- filter_factors(
+      pivot_draws = pivot_test, factor_draws = W,
+      lambda_draws = Lambda_test, delta_draws = delta_test,
+      theta_draws = theta_test,
+      sigma_draws = sigma_test,
+      tau_draws = tau_test,
+      n_draws = length(thin_burn)
+    )
+    pivot_test <- filtered$pivot_draws
+    W <- filtered$factor_draws
+    Lambda_test <- filtered$lambda_draws
+    delta_test <- filtered$delta_draws
+    theta_test <- filtered$theta_draws
+    tau_test <- filtered$tau_draws
+    sigma_test <- filtered$sigma_draws
+  }
 
 
   delta_test_id <- lapply(delta_test, function(x) x[rowSums(x) > 0, ])
@@ -134,7 +133,7 @@ run_mcmc_UGLT <- function(N, q, n_runs, alpha, beta, theta.shape, theta.rate, hy
     delta_test[[i]] <- delta_test[[i]][, order(pivot_test[[i]])]
     Lambda_test[[i]] <- Lambda_test[[i]][, order(pivot_test[[i]])]
 
-    for (f in 1:dim(data)[2]) {
+    for (f in 1:ncol(y)) {
       W[[i]][, f] <- W[[i]][order(pivot_test[[i]]), f] %*% diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][order(pivot_test[[i]])], ])))
     }
     Lambda_test[[i]] <- Lambda_test[[i]] %*% diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][order(pivot_test[[i]])], ])))
