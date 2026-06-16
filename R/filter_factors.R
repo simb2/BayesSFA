@@ -28,10 +28,10 @@ filter_factors <- function(pivot_draws, factor_draws, lambda_draws, delta_draws,
         # first we need to find the row
         col = col - k
         row <- which(delta_draws[[i]][, col] == 1)[1]
-        sigma_draws[[i]][row] <- sigma_draws[[i]][row]
-        factor_draws[[i]] <- factor_draws[[i]][-col, ]
-        lambda_draws[[i]] <- lambda_draws[[i]][ , -col]
-        delta_draws[[i]] <- delta_draws[[i]][, -col]
+        sigma_draws[[i]][row] <- sigma_draws[[i]][row] + lambda_draws[[i]][row, col]^2
+        factor_draws[[i]] <- factor_draws[[i]][-col, , drop = FALSE]
+        lambda_draws[[i]] <- lambda_draws[[i]][, -col, drop = FALSE]
+        delta_draws[[i]] <- delta_draws[[i]][, -col, drop = FALSE]
         if (is.null(dim(delta_draws[[i]]))) {
           pivot_draws[[i]] <- which(delta_draws[[i]] == 1)[1]
         } else {

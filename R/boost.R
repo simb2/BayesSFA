@@ -14,7 +14,6 @@ boost <- function(Lambda, factors, c_0) {
   for (j in 1:q) {
     psi_new_vec[j] = GIGrvg::rgig(1, lambda = (V - j + 1)/2 - 1.5 - N/2,
                                   chi = 3 + t(factors_psi[j, ]) %*% factors_psi[j, ], psi = c_0^(-1) * t(Lambda_psi[, j]) %*% Lambda_psi[, j])
-    if (is.na(psi_new_vec[j])) browser()
   }
 
   # un transofring:

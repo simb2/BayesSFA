@@ -30,7 +30,6 @@ boost_uglt <- function(Lambda, factors, sigma2, theta) {
     psi_new_vec[j] = GIGrvg::rgig(1, lambda = s[j]/2 - 1.5 - N/2,
                                   chi = 3 + sum(factors_psi[j, ]^2),
                                   psi = sum(Lambda_psi[, j]^2 / sigma2) / theta[j])
-    if (is.na(psi_new_vec[j])) browser()
   }
 
   # un transofring:

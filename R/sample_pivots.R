@@ -9,6 +9,7 @@
 #' @param pivots Length-q vector of current pivot row indices \eqn{l_1, \ldots, l_q}.
 #' @param factors \eqn{q \times N} factor matrix \eqn{F}.
 #' @param y \eqn{v \times N} data matrix \eqn{Y}.
+#' @param inner_prod_y Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.
 #' @param theta Length-q column shrinkage vector \eqn{\theta}.
 #' @param alpha Length-v shape parameters \eqn{\alpha} for the \eqn{G^{-1}} prior on \eqn{\sigma^2}.
 #' @param beta Length-v rate parameters \eqn{\beta} for the \eqn{G^{-1}} prior on \eqn{\sigma^2}.
@@ -18,7 +19,7 @@
 #' @return List with updated \code{delta} (\eqn{v \times q}) and \code{pivots} (length-q).
 
 
-update_pivots <- function(delta, pivots, factors, y, theta, alpha, beta,
+update_pivots <- function(delta, pivots, factors, y, inner_prod_y, theta, alpha, beta,
                           hyperparams, move_probs = list(pshift = 0.3, pswitch = 0.3,
                                                          pa = 0.5) ){
   # Specifies the probability of each 'move type', since move_probs isn't stricly a probability measure.
@@ -33,16 +34,18 @@ update_pivots <- function(delta, pivots, factors, y, theta, alpha, beta,
     u <- sample(1:3, 1,  prob = probs_type_move)
 
     if (u == 1) {
-      result <- shift_pivot_move(delta, pivots, factors, y, theta, alpha, beta, hyperparams, j)
+      result <- shift_pivot_move(delta, pivots, factors, y, inner_prod_y, theta, alpha, beta, hyperparams, j)
     } else if (u == 2) {
       result <- switch_pivots_move(delta = delta, pivots = pivots, factors = factors, y = y,
-                                   theta = theta, alpha = alpha, beta = beta, hyperparams = hyperparams, j)
+                                   inner_prod_y = inner_prod_y, theta = theta, alpha = alpha,
+                                   beta = beta, hyperparams = hyperparams, j = j)
     } else {
-      result <- add_delete_pivot_move(delta = delta, pivots = pivots, factors = factors, y = y, theta = theta, alpha = alpha, beta = beta,
-                                      hyperparams = hyperparams, pa = move_probs$pa, j = j)
+      result <- add_delete_pivot_move(delta = delta, pivots = pivots, factors = factors, y = y,
+                                      inner_prod_y = inner_prod_y, theta = theta, alpha = alpha,
+                                      beta = beta, hyperparams = hyperparams, pa = move_probs$pa, j = j)
     }
     # Update the pivots and delta
-    pivots <- apply(result$delta, 2, function(col) which(col != 0)[1])
+    pivots <- apply(result$delta != 0, 2, which.max)
     delta <- result$delta
 
     stopifnot(length(unique(result$pivots)) == length(result$pivots))
@@ -61,6 +64,7 @@ update_pivots <- function(delta, pivots, factors, y, theta, alpha, beta,
 #' @param pivots Length-q pivot vector.
 #' @param factors \eqn{q \times N} factor matrix \eqn{F}.
 #' @param y \eqn{v \times N} data matrix \eqn{Y}.
+#' @param inner_prod_y Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.
 #' @param theta Length-q column shrinkage vector \eqn{\theta}.
 #' @param alpha Length-v shape parameters \eqn{\alpha}.
 #' @param beta Length-v rate parameters \eqn{\beta}.
@@ -68,7 +72,7 @@ update_pivots <- function(delta, pivots, factors, y, theta, alpha, beta,
 #' @param j Column index to update.
 #' @return List with updated \code{delta} and \code{pivots}.
 
-shift_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta, hyperparams, j) {
+shift_pivot_move <- function(delta, pivots, factors, y, inner_prod_y, theta, alpha, beta, hyperparams, j) {
   V <- nrow(delta)
   q <- ncol(delta)
   lj <- pivots[j]
@@ -109,13 +113,10 @@ shift_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta, hype
     return(list(delta = delta, pivots = pivots))
   }
   # Calculate log likelihood ratios
-  O_new <- compute_log_likelihood_ratio(delta, l_new, j, factors, y, alpha, beta, theta)
-  O_old <- compute_log_likelihood_ratio(delta, lj, j, factors, y, alpha, beta, theta)
+  O_new <- compute_log_likelihood_ratio(delta, l_new, j, factors, y, inner_prod_y, alpha, beta, theta)
+  O_old <- compute_log_likelihood_ratio(delta, lj,    j, factors, y, inner_prod_y, alpha, beta, theta)
   # Calculate prior ratio for shift move
   dj <- sum(delta[, j])  # number of non-zero elements in column j
-  if (hyperparams$bH + V - l_new - dj + 1 < 0 || hyperparams$bH + V - lj - dj + 1 < 0) {
-    browser()
-  }
   R_shift <- lbeta(hyperparams$aH + dj - 1, hyperparams$bH + V - l_new - dj + 1) -
     lbeta(hyperparams$aH + dj - 1, hyperparams$bH + V - lj - dj + 1)
 
@@ -129,7 +130,7 @@ shift_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta, hype
     new_delta <- delta
     new_delta[l_new, j] <- 1
     new_delta[lj, j] <- 0
-    new_pivots <- apply(new_delta, 2, function(col) which(col != 0)[1])
+    new_pivots <- apply(new_delta != 0, 2, which.max)
 
     return(list(delta = new_delta, pivots = new_pivots))
   } else {
@@ -148,13 +149,14 @@ shift_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta, hype
 #' @param pivots Length-q pivot vector.
 #' @param factors \eqn{q \times N} factor matrix \eqn{F}.
 #' @param y \eqn{v \times N} data matrix \eqn{Y}.
+#' @param inner_prod_y Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.
 #' @param theta Length-q column shrinkage vector \eqn{\theta}.
 #' @param alpha Length-v shape parameters \eqn{\alpha}.
 #' @param beta Length-v rate parameters \eqn{\beta}.
 #' @param hyperparams List with \code{aH} and \code{bH}.
 #' @param j Column index to update.
 #' @return List with updated \code{delta} and \code{pivots}.
-switch_pivots_move <- function(delta, pivots, factors, y, theta, alpha, beta, hyperparams, j) {
+switch_pivots_move <- function(delta, pivots, factors, y, inner_prod_y, theta, alpha, beta, hyperparams, j) {
   V <- nrow(delta)
   q <- ncol(delta)
 
@@ -194,11 +196,11 @@ switch_pivots_move <- function(delta, pivots, factors, y, theta, alpha, beta, hy
   for (i in S_j_l) {
     # given l
     delta_cond[i, l] <- 0
-    O_ij_given_l_piv <- compute_log_likelihood_ratio(delta_cond, i, j, factors, y, alpha, beta, theta)
+    O_ij_given_l_piv <- compute_log_likelihood_ratio(delta_cond, i, j, factors, y, inner_prod_y, alpha, beta, theta)
     delta_cond[i,l] <- delta[i,l]
     # given j
     delta_cond[i, j] <- 0
-    O_i_ell_given_j <- compute_log_likelihood_ratio(delta_cond, i, l, factors, y, alpha, beta, theta)
+    O_i_ell_given_j <- compute_log_likelihood_ratio(delta_cond, i, l, factors, y, inner_prod_y, alpha, beta, theta)
     delta_cond[i, j] <- delta[i, j]
 
     if (delta[i, j] == 0) {
@@ -217,18 +219,6 @@ switch_pivots_move <- function(delta, pivots, factors, y, theta, alpha, beta, hy
   dj <- sum(delta[, j])
   d_l_piv <- sum(delta[, l])
   # After switching, column counts remain the same, only pivot positions change
-  if (hyperparams$aH + dj_new - 1 < 0 || hyperparams$bH + V - l_piv - dj_new + 1 < 0) {
-    browser()
-  }
-  if (hyperparams$aH + d_l_piv_new - 1 < 0 || hyperparams$bH + V - l_piv - dj_new + 1 < 0) {
-    browser()
-  } else if (hyperparams$bH + V - lj - d_l_piv_new + 1 < 0) {
-    browser()
-  } else if (hyperparams$bH + V - lj - dj + 1 < 0 ) {
-    browser()
-  } else if (hyperparams$bH + V - l_piv - d_l_piv + 1 < 0) {
-    browser()
-  }
   R_switch <- lbeta(hyperparams$aH + dj_new - 1, hyperparams$bH + V - l_piv - dj_new + 1) +
     lbeta(hyperparams$aH + d_l_piv_new - 1, hyperparams$bH + V - lj - d_l_piv_new + 1) -
     (lbeta(hyperparams$aH + dj - 1, hyperparams$bH + V - lj - dj + 1) +
@@ -240,7 +230,7 @@ switch_pivots_move <- function(delta, pivots, factors, y, theta, alpha, beta, hy
   alpha_switch <- exp(log_alpha)
   # Accept or reject
   if (runif(1) < alpha_switch) {
-    new_pivots <- apply(delta_new, 2, function(col) which(col != 0)[1])
+    new_pivots <- apply(delta_new != 0, 2, which.max)
     return(list(delta = delta_new, pivots = new_pivots, accepted = TRUE))
   } else {
     return(list(delta = delta, pivots = pivots, accepted = FALSE))
@@ -256,6 +246,7 @@ switch_pivots_move <- function(delta, pivots, factors, y, theta, alpha, beta, hy
 #' @param pivots Length-q pivot vector.
 #' @param factors \eqn{q \times N} factor matrix \eqn{F}.
 #' @param y \eqn{v \times N} data matrix \eqn{Y}.
+#' @param inner_prod_y Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.
 #' @param theta Length-q column shrinkage vector \eqn{\theta}.
 #' @param alpha Length-v shape parameters \eqn{\alpha}.
 #' @param beta Length-v rate parameters \eqn{\beta}.
@@ -264,7 +255,7 @@ switch_pivots_move <- function(delta, pivots, factors, y, theta, alpha, beta, hy
 #' @param j Column index to update.
 #' @return List with updated \code{delta} and \code{pivots}.
 
-add_delete_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta,
+add_delete_pivot_move <- function(delta, pivots, factors, y, inner_prod_y, theta, alpha, beta,
                                   hyperparams, pa, j) {
   V <- nrow(delta)
   q <- ncol(delta)
@@ -289,7 +280,7 @@ add_delete_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta,
     l_star <- below_pivot[1] + lj
     delta_new <- delta
     delta_new[lj, j] <- 0
-    piv_new <- apply(delta_new, 2, function(col) which(col != 0)[1])
+    piv_new <- apply(delta_new != 0, 2, which.max)
     condition2 <- (length(unique(piv_new)) == length(piv_new))
     can_delete <- condition2
   }
@@ -312,12 +303,12 @@ add_delete_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta,
   if (runif(1) < p_add_delta) {
     # Add move
     return(add_pivot_move(delta = delta, pivots = pivots, j = j, factors = factors, y = y,
-                          theta = theta, alpha = alpha, beta = beta,
+                          inner_prod_y = inner_prod_y, theta = theta, alpha = alpha, beta = beta,
                           hyperparams = hyperparams, p_add_delta = p_add_delta,
                           available_positions = available_for_add, pa = pa))
   } else {
     # Delete move
-    return(delete_pivot_move(delta, pivots, j, l_star, factors, y, theta, alpha, beta,
+    return(delete_pivot_move(delta, pivots, j, l_star, factors, y, inner_prod_y, theta, alpha, beta,
                              hyperparams, p_add_delta, pa))
   }
 }
@@ -333,6 +324,7 @@ add_delete_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta,
 #' @param j Column index to update.
 #' @param factors \eqn{q \times N} factor matrix \eqn{F}.
 #' @param y \eqn{v \times N} data matrix \eqn{Y}.
+#' @param inner_prod_y Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.
 #' @param theta Length-q column shrinkage vector \eqn{\theta}.
 #' @param alpha Length-v shape parameters \eqn{\alpha}.
 #' @param beta Length-v rate parameters \eqn{\beta}.
@@ -342,7 +334,7 @@ add_delete_pivot_move <- function(delta, pivots, factors, y, theta, alpha, beta,
 #' @param pa Tuning probability of adding a pivot when both moves are possible.
 #' @return List with updated \code{delta} and \code{pivots}.
 
-add_pivot_move <- function(delta, pivots, j, factors, y, theta, alpha, beta,
+add_pivot_move <- function(delta, pivots, j, factors, y, inner_prod_y, theta, alpha, beta,
                            hyperparams, available_positions, p_add_delta, pa) {
   V <- nrow(delta)
   q <- ncol(delta)
@@ -374,7 +366,7 @@ add_pivot_move <- function(delta, pivots, j, factors, y, theta, alpha, beta,
   # Calculate likelihood ratio
   delta_new <- delta
   delta_new[l_new, j] <- 1
-  O_new <- compute_log_likelihood_ratio(delta_new, l_new, j, factors, y, alpha, beta, theta)
+  O_new <- compute_log_likelihood_ratio(delta_new, l_new, j, factors, y, inner_prod_y, alpha, beta, theta)
 
   # Calculate prior ratio for add move
   dj <- sum(delta[, j])
@@ -393,7 +385,7 @@ add_pivot_move <- function(delta, pivots, j, factors, y, theta, alpha, beta,
   if (runif(1) < alpha_add) {
     new_delta <- delta
     new_delta[l_new, j] <- 1
-    pivots_new <- apply(new_delta, 2, function(col) which(col != 0)[1])
+    pivots_new <- apply(new_delta != 0, 2, which.max)
     return(list(delta = new_delta, pivots = pivots_new))
   } else {
     return(list(delta = delta, pivots = pivots))
@@ -411,6 +403,7 @@ add_pivot_move <- function(delta, pivots, j, factors, y, theta, alpha, beta,
 #' @param l_star Row index of the next non-zero entry below \eqn{l_j} in column j.
 #' @param factors \eqn{q \times N} factor matrix \eqn{F}.
 #' @param y \eqn{v \times N} data matrix \eqn{Y}.
+#' @param inner_prod_y Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.
 #' @param theta Length-q column shrinkage vector \eqn{\theta}.
 #' @param alpha Length-v shape parameters \eqn{\alpha}.
 #' @param beta Length-v rate parameters \eqn{\beta}.
@@ -419,13 +412,13 @@ add_pivot_move <- function(delta, pivots, j, factors, y, theta, alpha, beta,
 #' @param pa Tuning probability of adding a pivot when both moves are possible.
 #' @return List with updated \code{delta} and \code{pivots}.
 
-delete_pivot_move <- function(delta, pivots, j, l_star, factors, y, theta, alpha, beta,
+delete_pivot_move <- function(delta, pivots, j, l_star, factors, y, inner_prod_y, theta, alpha, beta,
                               hyperparams, p_add_delta, pa) {
   V <- nrow(delta)
   lj <- pivots[j]
 
   # Calculate likelihood ratio (negative of add move)
-  O_delete <- - compute_log_likelihood_ratio(delta, lj, j, factors, y, alpha, beta, theta)
+  O_delete <- - compute_log_likelihood_ratio(delta, lj, j, factors, y, inner_prod_y, alpha, beta, theta)
   # Calculate prior ratio for delete move (equation G.5)
   dj <- sum(delta[, j])
   R_delete <- lbeta(hyperparams$aH + dj - 2, hyperparams$bH + V - l_star - dj + 2) -
@@ -444,13 +437,12 @@ delete_pivot_move <- function(delta, pivots, j, l_star, factors, y, theta, alpha
     new_delta <- delta
     new_delta[lj, j] <- 0
 
-    new_pivots <- apply(new_delta, 2, function(col) which(col != 0)[1])
+    new_pivots <- apply(new_delta != 0, 2, which.max)
 
     return(list(delta = new_delta, pivots = new_pivots))
   } else {
     return(list(delta = delta, pivots = pivots))
   }
 }
-
 
 

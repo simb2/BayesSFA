@@ -13,16 +13,8 @@ sample_tau <- function(hyperparams, delta, pivots) {
   new.tau <- numeric(ncol(delta))
 
   for (j in 1:dim(delta)[2]) {
-    if (hyperparams$bH + nrow(delta) - pivots[j] -  colsums.delta[j] + 1 <  0) {
-      browser()
-    }
-
     new.tau[j] <- rbeta(1, hyperparams$aH + colsums.delta[j] - 1,
                         hyperparams$bH + nrow(delta) - pivots[j] -  colsums.delta[j] + 1)
-
-    if (is.na(new.tau[j])) {
-      browser()
-    }
   }
   return(new.tau)
 }

@@ -1,0 +1,18 @@
+#' Do simulation based calibration.
+
+#' Returns an S3 object, with plot method showing some stuff . . .
+#'
+#'
+#'
+#'
+#' @param returns the prior specification.
+#' @param prior_list: expects a list with the following:
+#'    alpha: a postive real numnber (first parameter for beta prior on tau).
+#'    beta: a positive real number (second parameter for beta prior on tau).
+#'    hyperparams:  .  . . .  
+#' @return an S3 object . . . 
+
+calibrate <- function(model, pior_list) {
+
+
+ }

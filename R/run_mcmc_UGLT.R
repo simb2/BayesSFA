@@ -57,14 +57,14 @@ run_mcmc_UGLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate, hyper
 
   for (i in 2:n_runs) {
     tau_test[[i]] <- sample_tau(hyperparams, delta_test[[i - 1]], pivot_test[[i - 1]])
-    delta_new <- sample_sparsity(y, W[[i - 1]], tau_test[[i]], theta_test[[i - 1]], delta_test[[i - 1]], as.integer(pivot_test[[i - 1]]), alpha, beta, inner_prod_y)
-    pivots_new <- apply(delta_new, 2, function(col) which(col != 0)[1])
+    delta_new <- sample_sparsity(y, W[[i - 1]], tau_test[[i]], theta_test[[i - 1]],
+                                  delta_test[[i - 1]], as.integer(pivot_test[[i - 1]]),
+                                  alpha, beta, inner_prod_y)
+    pivots_new <- apply(delta_new != 0, 2, which.max)
     res2 <- update_pivots(
       delta = delta_new, theta = theta_test[[i - 1]], pivots = pivots_new, factors = W[[i - 1]], y = y,
-      alpha = alpha, beta = beta, hyperparams = hyperparams, move_probs = list(
-        pshift = 0.3, pswitch = 0.3,
-        pa = 0.5
-      )
+      inner_prod_y = inner_prod_y, alpha = alpha, beta = beta, hyperparams = hyperparams,
+      move_probs = list(pshift = 0.3, pswitch = 0.3, pa = 0.5)
     )
     delta_test[[i]] <- res2$delta
     pivot_test[[i]] <- res2$pivots
@@ -130,14 +130,18 @@ run_mcmc_UGLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate, hyper
 
   for (i in seq_along(Lambda_test)) {
     pivot_test[[i]] <- unlist(pivot_test[[i]])
-    delta_test[[i]] <- delta_test[[i]][, order(pivot_test[[i]])]
-    Lambda_test[[i]] <- Lambda_test[[i]][, order(pivot_test[[i]])]
+    perm <- order(pivot_test[[i]])
+    delta_test[[i]] <- delta_test[[i]][, perm, drop = FALSE]
+    Lambda_test[[i]] <- Lambda_test[[i]][, perm, drop = FALSE]
+    theta_test[[i]] <- theta_test[[i]][perm]
+    tau_test[[i]] <- tau_test[[i]][perm]
 
+    sgn_mat <- diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][perm], ])))
     for (f in 1:ncol(y)) {
-      W[[i]][, f] <- W[[i]][order(pivot_test[[i]]), f] %*% diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][order(pivot_test[[i]])], ])))
+      W[[i]][, f] <- W[[i]][perm, f] %*% sgn_mat
     }
-    Lambda_test[[i]] <- Lambda_test[[i]] %*% diag(diag(sign(Lambda_test[[i]][pivot_test[[i]][order(pivot_test[[i]])], ])))
-    pivot_test[[i]] <- pivot_test[[i]][order(pivot_test[[i]])]
+    Lambda_test[[i]] <- Lambda_test[[i]] %*% sgn_mat
+    pivot_test[[i]] <- pivot_test[[i]][perm]
   }
   # Now we want to count the number of things with different sizes
   r <- numeric(length(Lambda_test))
@@ -174,7 +178,7 @@ run_mcmc_UGLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate, hyper
       compute_post_means(x = dfr)
     )
   })
-  estimate_results$r <- r_vals
+  names(estimate_results) <- as.character(r_vals)
 
 
   return(list(

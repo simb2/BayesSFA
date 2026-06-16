@@ -11,6 +11,42 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// compute_log_likelihood_ratio
+double compute_log_likelihood_ratio(umat delta, uword l_new, uword j, mat factors, mat y, vec inner_prod_y, vec alpha, vec beta, vec theta);
+RcppExport SEXP _BayesSFA_compute_log_likelihood_ratio(SEXP deltaSEXP, SEXP l_newSEXP, SEXP jSEXP, SEXP factorsSEXP, SEXP ySEXP, SEXP inner_prod_ySEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP thetaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< umat >::type delta(deltaSEXP);
+    Rcpp::traits::input_parameter< uword >::type l_new(l_newSEXP);
+    Rcpp::traits::input_parameter< uword >::type j(jSEXP);
+    Rcpp::traits::input_parameter< mat >::type factors(factorsSEXP);
+    Rcpp::traits::input_parameter< mat >::type y(ySEXP);
+    Rcpp::traits::input_parameter< vec >::type inner_prod_y(inner_prod_ySEXP);
+    Rcpp::traits::input_parameter< vec >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< vec >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< vec >::type theta(thetaSEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_log_likelihood_ratio(delta, l_new, j, factors, y, inner_prod_y, alpha, beta, theta));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sample_loadings_variances
+Rcpp::List sample_loadings_variances(mat y, mat factors, mat delta, vec theta, vec alpha, vec beta, vec inner_prod_y);
+RcppExport SEXP _BayesSFA_sample_loadings_variances(SEXP ySEXP, SEXP factorsSEXP, SEXP deltaSEXP, SEXP thetaSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP inner_prod_ySEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< mat >::type y(ySEXP);
+    Rcpp::traits::input_parameter< mat >::type factors(factorsSEXP);
+    Rcpp::traits::input_parameter< mat >::type delta(deltaSEXP);
+    Rcpp::traits::input_parameter< vec >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< vec >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< vec >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< vec >::type inner_prod_y(inner_prod_ySEXP);
+    rcpp_result_gen = Rcpp::wrap(sample_loadings_variances(y, factors, delta, theta, alpha, beta, inner_prod_y));
+    return rcpp_result_gen;
+END_RCPP
+}
 // sample_sparsity
 arma::umat sample_sparsity(arma::mat y, arma::mat factors, arma::vec tau, arma::vec theta, arma::umat delta, arma::uvec pivots, arma::vec alpha, arma::vec beta, arma::vec inner_prod_y);
 RcppExport SEXP _BayesSFA_sample_sparsity(SEXP ySEXP, SEXP factorsSEXP, SEXP tauSEXP, SEXP thetaSEXP, SEXP deltaSEXP, SEXP pivotsSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP inner_prod_ySEXP) {
@@ -32,6 +68,8 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_BayesSFA_compute_log_likelihood_ratio", (DL_FUNC) &_BayesSFA_compute_log_likelihood_ratio, 9},
+    {"_BayesSFA_sample_loadings_variances", (DL_FUNC) &_BayesSFA_sample_loadings_variances, 7},
     {"_BayesSFA_sample_sparsity", (DL_FUNC) &_BayesSFA_sample_sparsity, 9},
     {NULL, NULL, 0}
 };

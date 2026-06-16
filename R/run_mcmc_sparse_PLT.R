@@ -55,9 +55,9 @@ run_mcmc_sparse_PLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate,
 
   for (i in 2:n_runs) {
     tau_test[[i]] <- sample_tau(hyperparams, delta_test[[i - 1]], pivot_test[[i - 1]])
-    res <- sample_sparsity(y, W[[i - 1]], tau_test[[i]], theta_test[[i - 1]], delta_test[[i - 1]], alpha, beta, inner_prod_y)
-    delta_test[[i]] <- res$delta_new
-    pivots_new <- apply(res$delta_new, 2, function(col) which(col != 0)[1])
+    delta_test[[i]] <- sample_sparsity(y, W[[i - 1]], tau_test[[i]], theta_test[[i - 1]],
+                                        delta_test[[i - 1]], as.integer(pivot_test[[i - 1]]),
+                                        alpha, beta, inner_prod_y)
     pivot_test[[i]] <- 1:q
     res3 <- sample_loadings_variances(y, W[[i - 1]], delta_test[[i]], theta_test[[i - 1]], alpha, beta, inner_prod_y)
     Lambda_test[[i]] <- res3$Lambda_new
@@ -165,7 +165,7 @@ run_mcmc_sparse_PLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate,
       compute_post_means(x = dfr)
     )
   })
-  estimate_results$r <- r_vals
+  names(estimate_results) <- as.character(r_vals)
 
 
   return(list(
