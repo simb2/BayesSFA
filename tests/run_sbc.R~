@@ -1,0 +1,30 @@
+# Quick SBC runner — source() this file to try out sbc_PLT() and sbc_sparse().
+# Uses small dimensions so each run finishes in a few minutes.
+# Rank histograms should look roughly flat under a correct sampler.
+
+devtools::document()   # regenerates NAMESPACE with S3method(plot, sbc_result) etc.
+devtools::load_all()
+set.seed(42)
+res_plt <- sbc_PLT(
+  S      = 1000,
+  n_runs = 4000,
+  V = 8, q = 2, N = 50,
+  nu = 3, s2 = 1, c_0 = 1, thin = 4, burn = 1000
+)
+  print(res_plt)
+  plot(res_plt)
+
+res_uglt <- sbc_sparse(
+  S      = 250,
+  n_runs = 1000,
+  V = 10, q = 2, N = 50,
+  alpha = rep(3, 8), beta = rep(3, 8),
+  theta.shape = 2, theta.rate = 1,
+  hyperparams = list(aH = 4, bH = 1),
+  constraint = "UGLT",
+  thin = 4, burn = 200
+)
+
+print(res_uglt)
+plot(res_uglt)
+

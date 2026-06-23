@@ -78,10 +78,10 @@ run_mcmc_UGLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate, hyper
       sigma_test[[i]], delta_test[[i]]
     )
 
-    T_stat[[i]] <- sum(diag(0.5 * (Lambda_test[[i]] %*% t(Lambda_test[[i]]) + diag(sigma_test[[i]]))))
     boost <- boost_uglt(Lambda = Lambda_test[[i]], factors = W[[i]], sigma2 = sigma_test[[i]], theta = theta_test[[i]])
     Lambda_test[[i]] <- boost$Lambda_new
     W[[i]] <- boost$factors_new
+    T_stat[[i]] <- sum(diag(0.5 * (Lambda_test[[i]] %*% t(Lambda_test[[i]]) + diag(sigma_test[[i]]))))
     cli::cli_progress_update()
   }
 
@@ -94,7 +94,6 @@ run_mcmc_UGLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate, hyper
   pivot_test <- pivot_test[thin_burn]
   T_stat <- T_stat[thin_burn]
   W <- W[thin_burn]
-  print(length(thin_burn))
   pivot_test <- as.matrix(pivot_test)
   if (!fixed) {
     filtered <- filter_factors(

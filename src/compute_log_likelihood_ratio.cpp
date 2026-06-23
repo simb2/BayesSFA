@@ -5,8 +5,8 @@
 using namespace arma;
 
 // [[Rcpp::export]]
-double compute_log_likelihood_ratio(umat delta, uword l_new, uword j, mat factors, mat y,
-  vec inner_prod_y, vec alpha, vec beta, vec theta) {
+double compute_log_likelihood_ratio(arma::umat delta, arma::uword l_new, arma::uword j, arma::mat factors, arma::mat y,
+  arma::vec inner_prod_y, arma::vec alpha, arma::vec beta, arma::vec theta) {
 
   uword N = y.n_cols;
 

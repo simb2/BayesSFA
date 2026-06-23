@@ -10,6 +10,7 @@ add_pivot_move(
   j,
   factors,
   y,
+  inner_prod_y,
   theta,
   alpha,
   beta,
@@ -29,6 +30,8 @@ add_pivot_move(
 \item{factors}{\eqn{q \times N} factor matrix \eqn{F}.}
 
 \item{y}{\eqn{v \times N} data matrix \eqn{Y}.}
+
+\item{inner_prod_y}{Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.}
 
 \item{theta}{Length-q column shrinkage vector \eqn{\theta}.}
 

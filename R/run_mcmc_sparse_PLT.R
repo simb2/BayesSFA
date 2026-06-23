@@ -46,11 +46,11 @@ run_mcmc_sparse_PLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate,
   tau_test[[1]] <- rep(0.5, q) # how to choose starting values for this?
 
   theta_test[[1]] <- rep(1, q) # how to choose starting values for this?
-  pc <- princomp(t(y))
-  scores <- pc$scores[, 1:q]
-  W[[1]] <- t(scores)
-  Lambda_est <- pc$loadings[, 1:q]
-  sigma_test[[1]] <- diag(cov(t(y - Lambda_est %*% W[[1]])))
+  centered_y <- y - rowMeans(y)
+  sv <- svd(centered_y)
+  Lambda_est <- sv$u[, 1:q]
+  W[[1]] <- t(sv$v[, 1:q]) * sv$d[1:q]
+  sigma_test[[1]] <- diag(cov(t(centered_y - Lambda_est %*% W[[1]])))
 
 
   for (i in 2:n_runs) {
@@ -84,7 +84,6 @@ run_mcmc_sparse_PLT <- function(q, n_runs, alpha, beta, theta.shape, theta.rate,
   pivot_test <- pivot_test[thin_burn]
   T_stat <- T_stat[thin_burn]
   W <- W[thin_burn]
-  print(length(thin_burn))
   pivot_test <- as.matrix(pivot_test)
 
   if (!fixed) {

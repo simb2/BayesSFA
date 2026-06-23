@@ -4,7 +4,18 @@
 \alias{shift_pivot_move}
 \title{Shift pivot move}
 \usage{
-shift_pivot_move(delta, pivots, factors, y, theta, alpha, beta, hyperparams, j)
+shift_pivot_move(
+  delta,
+  pivots,
+  factors,
+  y,
+  inner_prod_y,
+  theta,
+  alpha,
+  beta,
+  hyperparams,
+  j
+)
 }
 \arguments{
 \item{delta}{\eqn{v \times q} binary sparsity matrix \eqn{\delta}.}
@@ -14,6 +25,8 @@ shift_pivot_move(delta, pivots, factors, y, theta, alpha, beta, hyperparams, j)
 \item{factors}{\eqn{q \times N} factor matrix \eqn{F}.}
 
 \item{y}{\eqn{v \times N} data matrix \eqn{Y}.}
+
+\item{inner_prod_y}{Length-v vector of precomputed \eqn{\sum_n y_{vn}^2}.}
 
 \item{theta}{Length-q column shrinkage vector \eqn{\theta}.}
 

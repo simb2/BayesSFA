@@ -5,8 +5,8 @@
 using namespace arma;
 
 // [[Rcpp::export]]
-Rcpp::List sample_loadings_variances(mat y, mat factors, mat delta, vec theta, 
-  vec alpha, vec beta, vec inner_prod_y) {
+Rcpp::List sample_loadings_variances(arma::mat y, arma::mat factors, arma::mat delta, arma::vec theta,
+  arma::vec alpha, arma::vec beta, arma::vec inner_prod_y) {
   mat Lambda_new = mat(delta.n_rows, delta.n_cols, fill::zeros);
   Rcpp::NumericVector sigma2_new(delta.n_rows);
   
