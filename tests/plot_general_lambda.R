@@ -45,9 +45,57 @@ plot_general_lambda <- function(results) {
     bsfa_boxplot_theme()
 }
 
+# ---- Noise Error (true vs. estimated signal ratio) --------------------------
+# Noise Error = |tr(Lambda Lambda^T)/tr(Omega) - tr(Lambda_est Lambda_est^T)/tr(cov(y))|
+# See true_noise_ratio() in sim_helpers.R for the caveat on the estimated term.
+
+add_noise_error_general_lambda <- function(results, samples) {
+  true_ratio <- purrr::map_dbl(samples, ~ true_noise_ratio(.x$Lambda, .x$Sigma))
+  results |>
+    dplyr::mutate(
+      true_ratio        = true_ratio,
+      uglt_noise_error  = abs(true_ratio - uglt_noise),
+      splt_noise_error  = abs(true_ratio - splt_noise)
+    )
+}
+
+plot_general_lambda_noise_error <- function(results_ne) {
+  long <- results_ne |>
+    tidyr::pivot_longer(
+      cols      = c(uglt_noise_error, splt_noise_error),
+      names_to  = "model",
+      values_to = "value"
+    ) |>
+    dplyr::mutate(
+      model = dplyr::case_when(
+        model == "splt_noise_error" ~ "Sparse PLT",
+        model == "uglt_noise_error" ~ "UGLT"
+      ),
+      model = factor(model, levels = c("Sparse PLT", "UGLT")),
+      V     = factor(V, levels = sort(unique(V)))
+    )
+
+  ggplot(long, aes(x = V, y = value, fill = model)) +
+    geom_boxplot(
+      position     = position_dodge2(width = 0.8, preserve = "single"),
+      width        = 0.7,
+      outlier.size = 0.8
+    ) +
+    scale_fill_manual(values = MODEL_COLORS[c("Sparse PLT", "UGLT")], name = "Model") +
+    labs(x = "Number of Variables (V)", y = "Noise Error") +
+    bsfa_boxplot_theme()
+}
+
 # ---- Usage -------------------------------------------------------------------
 
 results <- readRDS(here::here("tests", "results_general_lambda.rds"))
 p <- plot_general_lambda(results)
 p
 save_bsfa_plot(p, "general_lambda_boxplot.png")
+
+samples_gl <- readRDS(here::here("tests", "general_lambda_simstudy_samples.rds"))
+results_ne <- add_noise_error_general_lambda(results, samples_gl)
+saveRDS(results_ne, here::here("tests", "results_general_lambda_noise_error.rds"))
+p_ne <- plot_general_lambda_noise_error(results_ne)
+p_ne
+save_bsfa_plot(p_ne, "general_lambda_noise_error_boxplot.png")

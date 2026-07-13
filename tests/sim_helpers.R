@@ -117,6 +117,18 @@ contributed_variance_noise <- function(L, y) {
   sum(diag(L %*% t(L))) / sum(diag(cov(t(y))))
 }
 
+# True signal-to-total-variance ratio tr(Lambda Lambda^T) / tr(Omega), with
+# Omega = Lambda Lambda^T + Sigma the true generative total covariance.
+# Paired with the `*_noise` columns already saved by the sim studies (which
+# are tr(Lambda_est Lambda_est^T) / tr(cov(y)), i.e. the same ratio computed
+# from the fit, using tr(cov(y)) as the practical stand-in for tr(Omega_hat)
+# since Sigma_hat was never saved to disk) to get the Noise Error metric
+# |true_ratio - est_ratio|.
+true_noise_ratio <- function(Lambda, Sigma) {
+  signal <- sum(diag(Lambda %*% t(Lambda)))
+  signal / (signal + sum(diag(Sigma)))
+}
+
 # ... absorbs extra pmap columns (V, q, noisy, etc.)
 compute_goodness_of_fit <- function(N, Lambda, Sigma, factors,
                                     Lambda_est, sigma_est, factors_est, ...) {

@@ -87,6 +87,52 @@ plot_noisy_variables_patchwork <- function(results) {
     patchwork::plot_layout(heights = c(10, 1))
 }
 
+# ---- Noise Error (true vs. estimated signal ratio) --------------------------
+# Noise Error = |tr(Lambda Lambda^T)/tr(Omega) - tr(Lambda_est Lambda_est^T)/tr(cov(y))|
+# See true_noise_ratio() in sim_helpers.R for the caveat on the estimated term.
+
+add_noise_error_noisy_variables <- function(results, samples) {
+  true_ratio <- purrr::map_dbl(samples, ~ true_noise_ratio(.x$Lambda, .x$Sigma))
+  results |>
+    dplyr::mutate(
+      true_ratio       = true_ratio,
+      plt_noise_error  = abs(true_ratio - plt_noise),
+      uglt_noise_error = abs(true_ratio - uglt_noise),
+      splt_noise_error = abs(true_ratio - splt_noise)
+    )
+}
+
+plot_noisy_variables_noise_error <- function(results_ne) {
+  long <- results_ne |>
+    tidyr::pivot_longer(
+      cols      = c(plt_noise_error, uglt_noise_error, splt_noise_error),
+      names_to  = "model",
+      values_to = "value"
+    ) |>
+    dplyr::mutate(
+      model = dplyr::case_when(
+        model == "plt_noise_error"  ~ "Non-sparse PLT",
+        model == "splt_noise_error" ~ "Sparse PLT",
+        model == "uglt_noise_error" ~ "UGLT"
+      ),
+      model = factor(model, levels = names(MODEL_COLORS)),
+      N     = factor(N),
+      noisy = ifelse(noisy, "Noisy Variables", "Non-noisy Variables"),
+      V     = paste0("V: ", V)
+    )
+
+  ggplot(long, aes(x = N, y = value, fill = model)) +
+    geom_boxplot(
+      position     = position_dodge2(width = 0.8, preserve = "single"),
+      width        = 0.7,
+      outlier.size = 0.8
+    ) +
+    facet_grid(~ noisy + V, scales = "free_y") +
+    scale_fill_manual(values = MODEL_COLORS, name = "Model") +
+    labs(x = "Number of Observations (N)", y = "Noise Error") +
+    bsfa_boxplot_theme()
+}
+
 # ---- Usage -------------------------------------------------------------------
 
 results <- readRDS(here::here("tests", "results_noisy_variables.rds"))
@@ -100,4 +146,11 @@ save_bsfa_plot(p_combined, "noisy_variables_boxplot.png", width = 10, height = 8
 p_patchwork <- plot_noisy_variables_patchwork(results)
 p_patchwork
 save_bsfa_plot(p_patchwork, "noisy_variables_boxplot_patchwork.png", width = 10, height = 6)
+
+samples_nv <- readRDS(here::here("tests", "sim_noisy_variables_samples.rds"))
+results_ne <- add_noise_error_noisy_variables(results, samples_nv)
+saveRDS(results_ne, here::here("tests", "results_noisy_variables_noise_error.rds"))
+p_ne <- plot_noisy_variables_noise_error(results_ne)
+p_ne
+save_bsfa_plot(p_ne, "noisy_variables_noise_error_boxplot.png", width = 10, height = 6)
 
