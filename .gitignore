@@ -6,3 +6,4 @@
 .RData
 .quarto
 *.rds
+tests/figures/

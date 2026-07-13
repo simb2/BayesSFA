@@ -1,7 +1,29 @@
 # Shared helpers for simulation studies. Source this file at the top of each
 # sim study script.
 #
-# Dependencies: MASS, ggplot2, reshape2, scoringRules, tibble
+# Dependencies: MASS, ggplot2, reshape2, scoringRules, tibble, furrr, future
+
+# ---- Parallel worker setup ---------------------------------------------------
+
+# `future`'s multisession workers are fresh R processes. `library(BayesSFA)`
+# in the main session normally gets auto-detected and re-attached in each
+# worker by `future` itself, but call this at the top of any function passed
+# to future_map()/future_pmap()/future_imap() as a cheap, explicit guarantee
+# that the package (and its compiled Rcpp/RcppArmadillo code) is loaded.
+ensure_pkg_loaded <- function() {
+  if (!isTRUE(getOption("bsfa_worker_loaded", FALSE))) {
+    # Rcpp/RcppArmadillo must be attached *before* BayesSFA, or BayesSFA's
+    # compiled code fails at runtime with "function 'enterRNGScope' not
+    # provided by package 'Rcpp'" - a namespace-load-order quirk, not a
+    # build issue (reproduces even from a clean R CMD INSTALL).
+    suppressPackageStartupMessages({
+      library(Rcpp)
+      library(RcppArmadillo)
+      library(BayesSFA)
+    })
+    options(bsfa_worker_loaded = TRUE)
+  }
+}
 
 # ---- Data simulators --------------------------------------------------------
 
@@ -129,6 +151,79 @@ get_plt_est <- function(fit) {
 }
 
 # ---- Plots ------------------------------------------------------------------
+
+# Shared model color/theme so every sim-study boxplot looks consistent.
+MODEL_COLORS <- c(
+  "Non-sparse PLT" = "#283593",
+  "Sparse PLT"     = "#2e7d32",
+  "UGLT"           = "#4db6ac"
+)
+
+bsfa_boxplot_theme <- function() {
+  ggplot2::theme_bw(base_size = 11) +
+    ggplot2::theme(
+      strip.background   = ggplot2::element_blank(),
+      strip.text.y.right = ggplot2::element_text(angle = 0, hjust = 0),
+      strip.text.x       = ggplot2::element_text(face = "bold"),
+      legend.position     = "bottom",
+      panel.grid.major.x  = ggplot2::element_blank(),
+      panel.spacing       = ggplot2::unit(0.5, "lines")
+    )
+}
+
+# Save a plot into tests/figures/ (created if missing), as PNG.
+save_bsfa_plot <- function(plot, filename, width = 8, height = 6) {
+  fig_dir <- here::here("tests", "figures")
+  dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
+  ggplot2::ggsave(file.path(fig_dir, filename), plot = plot, width = width, height = height, dpi = 300)
+}
+
+# Save MCMC diagnostic plots (trace, ACF, and factor-count trace if present)
+# for one fit's draws into tests/figures/diagnostics/.
+# draws: a fitBSFA draws tibble (has $T_stat, $r) or a fitBayesPLT-style list
+# (has $T_stat only).
+save_mcmc_diagnostics <- function(draws, label) {
+  diag_dir <- here::here("tests", "figures", "diagnostics")
+  dir.create(diag_dir, showWarnings = FALSE, recursive = TRUE)
+
+  T_stat <- draws$T_stat
+  trace_df <- tibble::tibble(iteration = seq_along(T_stat), T_stat = T_stat)
+
+  trace_plot <- ggplot2::ggplot(trace_df, ggplot2::aes(x = iteration, y = T_stat)) +
+    ggplot2::geom_line(linewidth = 0.4, alpha = 0.7) +
+    ggplot2::labs(x = "Iteration (post burn-in/thin)", y = "T statistic",
+                  title = paste0(label, " — trace")) +
+    ggplot2::theme_minimal()
+
+  has_r <- !is.null(draws$r)
+  if (has_r) {
+    r_df <- tibble::tibble(iteration = seq_along(draws$r), r = draws$r)
+    r_plot <- ggplot2::ggplot(r_df, ggplot2::aes(x = iteration, y = r)) +
+      ggplot2::geom_step(linewidth = 0.4) +
+      ggplot2::labs(x = "Iteration (post burn-in/thin)", y = "Number of active factors (r)",
+                    title = paste0(label, " — factor count")) +
+      ggplot2::theme_minimal()
+  }
+
+  if (has_r && requireNamespace("patchwork", quietly = TRUE)) {
+    combined <- trace_plot / r_plot
+    ggplot2::ggsave(file.path(diag_dir, paste0(label, "_trace.png")),
+                     combined, width = 8, height = 6, dpi = 300)
+  } else {
+    ggplot2::ggsave(file.path(diag_dir, paste0(label, "_trace.png")),
+                     trace_plot, width = 8, height = 4, dpi = 300)
+    if (has_r) {
+      ggplot2::ggsave(file.path(diag_dir, paste0(label, "_r_trace.png")),
+                       r_plot, width = 8, height = 4, dpi = 300)
+    }
+  }
+
+  png(file.path(diag_dir, paste0(label, "_acf.png")), width = 800, height = 600, res = 150)
+  acf(T_stat, main = paste0(label, " — ACF of T statistic"))
+  dev.off()
+
+  invisible(NULL)
+}
 
 make_heat_map <- function(Lambda) {
   Lambda_df       <- reshape2::melt(Lambda)

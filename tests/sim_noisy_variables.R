@@ -1,12 +1,20 @@
-devtools::load_all()
+library(Rcpp)
+library(RcppArmadillo)
+library(BayesSFA)
 library(MASS)
 library(purrr)
 library(tidyr)
 library(dplyr)
 library(ggplot2)
 library(scoringRules)
+library(furrr)
+library(future)
 source(here::here("tests", "sim_helpers.R"))
 set.seed(8)
+
+# Leave a couple of cores free; each worker holds its own copy of the fitted
+# model's draws, so memory (not core count) is the binding constraint here.
+future::plan(future::multisession, workers = min(6, future::availableCores() - 1))
 
 # ---- Data simulation ---------------------------------------------------------
 
@@ -79,15 +87,25 @@ get_sparse_est <- function(fit, q) {
   )
 }
 
+# Build a descriptive diagnostics label for row `idx` of `settings`.
+noisy_run_label <- function(settings, idx, model_name) {
+  noisy_tag <- if (settings$noisy[idx]) "Noisy" else "NonNoisy"
+  paste0("noisy_N", settings$N[idx], "_V", settings$V[idx], "_", noisy_tag, "_", model_name)
+}
+
 # ---- Simulation settings ----------------------------------------------------
 
-n_subj    <- c(300, 400)
-n_vars    <- c(40, 50)
-n_factors <- 2
+n_subj    <- c(100, 150)
+n_vars    <- c(220, 320)
+n_factors <- 8
+N_REP     <- 50
 
-settings <- tidyr::crossing(N = n_subj, V = n_vars, q = n_factors, noisy = c(FALSE, TRUE))
-samples  <- purrr::pmap(settings, function(N, V, q, noisy)
+settings <- tidyr::crossing(N = n_subj, V = n_vars, q = n_factors,
+                             noisy = c(FALSE, TRUE), rep = seq_len(N_REP))
+samples  <- purrr::pmap(settings, function(N, V, q, noisy, rep)
   if (noisy) sim_data_N(N, V, q) else sim_data_L(N, V, q))
+
+saveRDS(samples, here::here("tests", "sim_noisy_variables_samples.rds"))
 
 # ---- Non-sparse PLT model ---------------------------------------------------
 
@@ -100,95 +118,72 @@ plt_starts <- purrr::map(samples, function(samp) {
   list(Lambda_0 = Lambda_0, sigma2_0 = sigma2_0)
 })
 
-plt_fits <- purrr::map2(samples, plt_starts, function(samp, start) {
-  fitBayesPLT(
+plt_results <- furrr::future_pmap(list(samples, plt_starts, seq_along(samples)), function(samp, start, idx) {
+  ensure_pkg_loaded()
+  fit <- fitBayesPLT(
     Lambda_0 = start$Lambda_0, sigma2_0 = start$sigma2_0,
-    n_runs = 5000, data = samp$data,
+    n_runs = 7000, data = samp$data,
     q = n_factors, nu = 3, s2 = 0.5, c_0 = 1,
-    thin = 2, burn = 500
+    thin = 2, burn = 2000
   )
-})
+  if (settings$rep[idx] == 1) {
+    save_mcmc_diagnostics(fit, noisy_run_label(settings, idx, "NonSparsePLT"))
+  }
+  lambda_est  <- apply(fit$Lambda,    c(2, 3), mean)
+  sigma_est   <- apply(fit$Variances, 2,       mean)
+  factors_est <- apply(fit$Factors,   c(2, 3), mean)
+  list(
+    mse   = compute_mse(settings$N[idx], samp$Lambda, samp$Sigma, samp$factors,
+                         lambda_est, sigma_est, factors_est),
+    crps  = avg_crps_array(fit$Lambda, samp$Lambda),
+    noise = contributed_variance_noise(lambda_est, samp$data)
+  )
+}, .options = furrr::furrr_options(seed = TRUE))
+plt_mse   <- purrr::map_dbl(plt_results, "mse")
+plt_crps  <- purrr::map_dbl(plt_results, "crps")
+plt_noise <- purrr::map_dbl(plt_results, "noise")
 
-plt_lambda_est   <- purrr::map(plt_fits, ~ apply(.x$Lambda,    c(2, 3), mean))
-plt_sigma_est    <- purrr::map(plt_fits, ~ apply(.x$Variances, 2,       mean))
-plt_factors_est  <- purrr::map(plt_fits, ~ apply(.x$Factors,   c(2, 3), mean))
-
-plt_mse <- purrr::pmap_dbl(
-  tibble::tibble(
-    N = settings$N, Lambda = map(samples, "Lambda"), Sigma = map(samples, "Sigma"),
-    factors = map(samples, "factors"),
-    Lambda_est = plt_lambda_est, sigma_est = plt_sigma_est, factors_est = plt_factors_est
-  ),
-  compute_mse
-)
-plt_crps  <- purrr::map2_dbl(plt_fits, map(samples, "Lambda"),
-  ~ avg_crps_array(.x$Lambda, .y))
-plt_noise <- purrr::map2_dbl(plt_lambda_est, map(samples, "data"),
-  contributed_variance_noise)
+# Fit one sparse model on one sample and immediately reduce it to the three
+# scalar metrics. Keeping only these per row (instead of the full fit/draws
+# for all ~400 rows at once) is what keeps memory bounded for this study.
+fit_and_score <- function(samp, idx, constraint, label_suffix) {
+  ensure_pkg_loaded()
+  V <- nrow(samp$data)
+  fit <- fitBSFA(
+    y = samp$data, constraint = constraint, fixed = TRUE,
+    q = n_factors, n_runs = 7000,
+    alpha = rep(1.5, V), beta = rep(1.5, V),
+    theta.shape = 1.5, theta.rate = 1.5,
+    hyperparams = list(aH = 2, bH = 2),
+    thin = 2, burn = 2000
+  )
+  if (settings$rep[idx] == 1) {
+    save_mcmc_diagnostics(fit$draws, noisy_run_label(settings, idx, label_suffix))
+  }
+  est <- get_sparse_est(fit, q = n_factors)
+  list(
+    mse   = compute_mse(settings$N[idx], samp$Lambda, samp$Sigma, samp$factors,
+                         est$lambda_est, est$sigma2_mean, est$factors_est),
+    crps  = avg_crps_list(est$lambda_draws, samp$Lambda),
+    noise = contributed_variance_noise(est$lambda_est, samp$data)
+  )
+}
 
 # ---- UGLT sparse model ------------------------------------------------------
 
-uglt_fits <- purrr::map(samples, function(samp) {
-  V <- nrow(samp$data)
-  fitBSFA(
-    y = samp$data, constraint = "UGLT", fixed = TRUE,
-    q = n_factors, n_runs = 5000,
-    alpha = rep(1.5, V), beta = rep(1.5, V),
-    theta.shape = 1.5, theta.rate = 1.5,
-    hyperparams = list(aH = 2, bH = 2),
-    thin = 2, burn = 500
-  )
-})
-
-uglt_ests        <- purrr::map(uglt_fits, get_sparse_est, q = n_factors)
-uglt_lambda_est  <- purrr::map(uglt_ests, "lambda_est")
-uglt_sigma_est   <- purrr::map(uglt_ests, "sigma2_mean")
-uglt_factors_est <- purrr::map(uglt_ests, "factors_est")
-
-uglt_mse <- purrr::pmap_dbl(
-  tibble::tibble(
-    N = settings$N, Lambda = map(samples, "Lambda"), Sigma = map(samples, "Sigma"),
-    factors = map(samples, "factors"),
-    Lambda_est = uglt_lambda_est, sigma_est = uglt_sigma_est, factors_est = uglt_factors_est
-  ),
-  compute_mse
-)
-uglt_crps  <- purrr::map2_dbl(uglt_ests, map(samples, "Lambda"),
-  ~ avg_crps_list(.x$lambda_draws, .y))
-uglt_noise <- purrr::map2_dbl(uglt_lambda_est, map(samples, "data"),
-  contributed_variance_noise)
+uglt_results <- furrr::future_imap(samples, fit_and_score, constraint = "UGLT", label_suffix = "UGLT",
+                                    .options = furrr::furrr_options(seed = TRUE))
+uglt_mse   <- purrr::map_dbl(uglt_results, "mse")
+uglt_crps  <- purrr::map_dbl(uglt_results, "crps")
+uglt_noise <- purrr::map_dbl(uglt_results, "noise")
 
 # ---- Sparse PLT model -------------------------------------------------------
 
-splt_fits <- purrr::map(samples, function(samp) {
-  V <- nrow(samp$data)
-  fitBSFA(
-    y = samp$data, constraint = "PLT", fixed = TRUE,
-    q = n_factors, n_runs = 5000,
-    alpha = rep(1.5, V), beta = rep(1.5, V),
-    theta.shape = 1.5, theta.rate = 1.5,
-    hyperparams = list(aH = 2, bH = 2),
-    thin = 2, burn = 500
-  )
-})
-
-splt_ests        <- purrr::map(splt_fits, get_sparse_est, q = n_factors)
-splt_lambda_est  <- purrr::map(splt_ests, "lambda_est")
-splt_sigma_est   <- purrr::map(splt_ests, "sigma2_mean")
-splt_factors_est <- purrr::map(splt_ests, "factors_est")
-
-splt_mse <- purrr::pmap_dbl(
-  tibble::tibble(
-    N = settings$N, Lambda = map(samples, "Lambda"), Sigma = map(samples, "Sigma"),
-    factors = map(samples, "factors"),
-    Lambda_est = splt_lambda_est, sigma_est = splt_sigma_est, factors_est = splt_factors_est
-  ),
-  compute_mse
-)
-splt_crps  <- purrr::map2_dbl(splt_ests, map(samples, "Lambda"),
-  ~ avg_crps_list(.x$lambda_draws, .y))
-splt_noise <- purrr::map2_dbl(splt_lambda_est, map(samples, "data"),
-  contributed_variance_noise)
+splt_results <- furrr::future_imap(samples, fit_and_score, constraint = "PLT", label_suffix = "SparsePLT",
+                                    .options = furrr::furrr_options(seed = TRUE))
+splt_mse   <- purrr::map_dbl(splt_results, "mse")
+splt_crps  <- purrr::map_dbl(splt_results, "crps")
+splt_noise <- purrr::map_dbl(splt_results, "noise")
 
 # ---- Results ----------------------------------------------------------------
 
