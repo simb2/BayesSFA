@@ -87,9 +87,10 @@ plot_noisy_variables_patchwork <- function(results) {
     patchwork::plot_layout(heights = c(10, 1))
 }
 
-# Same as pivot_noisy_results(), but the "Noise Ratio" metric is populated
-# from noise_error (|true - estimated| noise ratio) instead of the raw
-# estimated noise ratio. Requires results_ne (see add_noise_error_noisy_variables()).
+# Same as pivot_noisy_results(), but the "Noise Ratio" metric is replaced by
+# noise_error (|true - estimated| noise ratio) instead of the raw estimated
+# noise ratio, and relabeled "Noise Error" accordingly. Requires results_ne
+# (see add_noise_error_noisy_variables()).
 pivot_noisy_results_ne <- function(results_ne) {
   results_ne |>
     dplyr::mutate(
@@ -97,7 +98,13 @@ pivot_noisy_results_ne <- function(results_ne) {
       uglt_noise = uglt_noise_error,
       splt_noise = splt_noise_error
     ) |>
-    pivot_noisy_results()
+    pivot_noisy_results() |>
+    dplyr::mutate(
+      metric = factor(
+        dplyr::recode(as.character(metric), "Noise Ratio" = "Noise Error"),
+        levels = c("CRPS", "Goodness of Fit", "Noise Error")
+      )
+    )
 }
 
 plot_noisy_variables_split_ne <- function(results_ne, noisy_val = FALSE) {
@@ -196,7 +203,7 @@ save_bsfa_plot(p_combined, "noisy_variables_boxplot.png", width = 10, height = 8
 
 # Two-panel version matching thesis layout (requires patchwork + cowplot).
 # Uses noise_error (|true - estimated| noise ratio) in place of the raw
-# estimated noise ratio, still labeled "Noise Ratio" in the plot.
+# estimated noise ratio, labeled "Noise Error" in the plot.
 p_patchwork <- plot_noisy_variables_patchwork_ne(results_ne)
 p_patchwork
 save_bsfa_plot(p_patchwork, "noisy_variables_boxplot_patchwork.png", width = 10, height = 6)

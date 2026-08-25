@@ -162,6 +162,62 @@ get_plt_est <- function(fit) {
   )
 }
 
+# ---- PSIS-LOO (entry-wise) ---------------------------------------------------
+#
+# Following Vehtari, Mononen, Tolvanen, Sivula & Winther (2016, JMLR) SS3.6:
+# rather than refitting per held-out point, importance-weight a single
+# full-data fit's posterior draws to approximate the leave-one-out predictive
+# density, then stabilize with Pareto-smoothed importance sampling
+# (loo::loo()). This applies directly here because the likelihood factorizes
+# over (feature, subject) entries given each draw's Lambda, F, sigma2:
+# y_vj ~ N(Lambda_v . F_j, sigma2_v). No held-out split or refit needed, so
+# this is much cheaper than the repeated-split CV above.
+
+# fitBSFA draws (one list element per retained iteration): Lambda_test[[i]] is
+# V x r_i, W[[i]] is r_i x N (r_i can vary by draw after spurious-factor
+# filtering -- fine here since only the V x N product Lambda %*% F is used),
+# sigma_test[[i]] is length V. Returns an (n_draws x V*N) pointwise log-lik
+# matrix, column-major over (feature, subject) to match as.vector(y).
+pointwise_loglik_sparse <- function(fit, y) {
+  N <- ncol(y)
+  draws <- fit$draws
+  n_draws <- nrow(draws)
+  log_lik <- matrix(NA_real_, nrow = n_draws, ncol = length(y))
+  for (i in seq_len(n_draws)) {
+    pred <- draws$Lambda_test[[i]] %*% draws$W[[i]]
+    sd_i <- rep(sqrt(draws$sigma_test[[i]]), times = N)
+    log_lik[i, ] <- dnorm(as.vector(y), mean = as.vector(pred), sd = sd_i, log = TRUE)
+  }
+  log_lik
+}
+
+# fitBayesPLT draws (arrays): Lambda is (n_draws x V x q), Factors is
+# (n_draws x q x N), Variances is (n_draws x V).
+pointwise_loglik_plt <- function(fit, y) {
+  N <- ncol(y)
+  n_draws <- dim(fit$Lambda)[1]
+  log_lik <- matrix(NA_real_, nrow = n_draws, ncol = length(y))
+  for (i in seq_len(n_draws)) {
+    pred <- fit$Lambda[i, , ] %*% fit$Factors[i, , ]
+    sd_i <- rep(sqrt(fit$Variances[i, ]), times = N)
+    log_lik[i, ] <- dnorm(as.vector(y), mean = as.vector(pred), sd = sd_i, log = TRUE)
+  }
+  log_lik
+}
+
+# Thin wrapper so callers don't need to know the loo:: call signature.
+run_psis_loo <- function(log_lik) {
+  loo::loo(log_lik)
+}
+
+# Share of entries with Pareto k > 0.7 (loo's threshold above which the PSIS
+# estimate for that entry is considered unreliable; see BayesianLOOCV-3.pdf
+# SS3.6.3), plus the max k, per model.
+pareto_k_summary <- function(loo_obj) {
+  k <- loo_obj$diagnostics$pareto_k
+  c(n_high_k = sum(k > 0.7), max_k = max(k), prop_high_k = mean(k > 0.7))
+}
+
 # ---- Plots ------------------------------------------------------------------
 
 # Shared model color/theme so every sim-study boxplot looks consistent.
