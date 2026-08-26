@@ -164,14 +164,6 @@ get_plt_est <- function(fit) {
 
 # ---- PSIS-LOO (entry-wise) ---------------------------------------------------
 #
-# Following Vehtari, Mononen, Tolvanen, Sivula & Winther (2016, JMLR) SS3.6:
-# rather than refitting per held-out point, importance-weight a single
-# full-data fit's posterior draws to approximate the leave-one-out predictive
-# density, then stabilize with Pareto-smoothed importance sampling
-# (loo::loo()). This applies directly here because the likelihood factorizes
-# over (feature, subject) entries given each draw's Lambda, F, sigma2:
-# y_vj ~ N(Lambda_v . F_j, sigma2_v). No held-out split or refit needed, so
-# this is much cheaper than the repeated-split CV above.
 
 # fitBSFA draws (one list element per retained iteration): Lambda_test[[i]] is
 # V x r_i, W[[i]] is r_i x N (r_i can vary by draw after spurious-factor
@@ -210,6 +202,17 @@ run_psis_loo <- function(log_lik) {
   loo::loo(log_lik)
 }
 
+# WAIC (BayesianLOOCV-3.pdf SS3.8): a cheaper, non-importance-sampling
+# alternative on the same log-lik matrix -- a Taylor-series approximation to
+# LOO with no refitting or reweighting, but also no per-point reliability
+# diagnostic like PSIS-LOO's Pareto k, and known to be biased under weak
+# priors / hierarchical structure (which the sparse shrinkage prior on Lambda
+# arguably is). Useful as a cross-check against the PSIS-LOO ranking, not a
+# replacement for it.
+run_waic <- function(log_lik) {
+  loo::waic(log_lik)
+}
+
 # Share of entries with Pareto k > 0.7 (loo's threshold above which the PSIS
 # estimate for that entry is considered unreliable; see BayesianLOOCV-3.pdf
 # SS3.6.3), plus the max k, per model.
@@ -237,6 +240,30 @@ bsfa_boxplot_theme <- function() {
       panel.grid.major.x  = ggplot2::element_blank(),
       panel.spacing       = ggplot2::unit(0.5, "lines")
     )
+}
+
+# Point-range plot of an elpd estimate +/- 1 SE per model, from a named list
+# of loo:: results as returned by run_psis_loo()/run_waic() (e.g.
+# list("Non-sparse PLT" = ..., "Sparse PLT" = ..., "UGLT" = ...)). `estimate`
+# selects the row of loo_obj$estimates to plot -- "elpd_loo" for PSIS-LOO
+# results, "elpd_waic" for WAIC results.
+plot_elpd_comparison <- function(loo_by_model, estimate = "elpd_loo",
+                                  title = "PSIS-LOO model comparison") {
+  df <- purrr::imap_dfr(loo_by_model, function(loo_obj, model) {
+    est <- loo_obj$estimates[estimate, ]
+    tibble::tibble(model = model, elpd = est[["Estimate"]], se = est[["SE"]])
+  })
+  df$model <- factor(df$model, levels = names(MODEL_COLORS))
+
+  ggplot2::ggplot(df, ggplot2::aes(x = model, y = elpd, color = model)) +
+    ggplot2::geom_pointrange(
+      ggplot2::aes(ymin = elpd - se, ymax = elpd + se),
+      linewidth = 0.8, size = 0.6
+    ) +
+    ggplot2::scale_color_manual(values = MODEL_COLORS, guide = "none") +
+    ggplot2::labs(x = NULL, y = estimate, title = title,
+                  subtitle = "Point = estimate, bars = ± 1 SE (higher is better)") +
+    bsfa_boxplot_theme()
 }
 
 # Save a plot into tests/figures/ (created if missing), as PNG.
